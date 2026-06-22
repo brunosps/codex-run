@@ -34,12 +34,21 @@ checkout principal **ABORTE** (`BLOCKED`) e oriente: crie/uso uma worktree prime
 3. Existe um **prompt/spec** (o que o Codex receberá). Convenções comuns: `.dw/spec/<slug>/codex-prompt.md`
    (dev-workflow), `PROMPT.md`, `TASK.md`, ou um caminho que o dono indicar. **Leia-o** — é o escopo/fence/gate.
 
-## Onde rodar — PREFERIR Workflow (visível em /workflows)
-Quando houver harness de **Workflow** (multi-agente), **dispare o `codex exec` DENTRO de um workflow** — um agente
-de workflow consegue rodar o codex (rede OK, comprovado). Vantagens: a execução aparece em `/workflows`, e as
-fases **Implementar → Avaliar (nota 0–10) → Escalar → Gate (fan-out)** orquestram juntas. **Fallback:** se não
-houver harness de workflow, rode via Bash em background (precisa de rede → sandbox do Bash desabilitado p/ o codex
-alcançar a API). Em ambos, vale a REGRA hard (worktree dedicada) + a captura detalhada + STOP-para-gate.
+## Onde rodar — escolha do VEÍCULO (a thread principal NUNCA roda inline)
+A thread principal **orquestra**; a execução vai p/ um destes (ver [[orquestrador-nao-executor]]):
+- **Workflow (PREFERIDO)** — quando há pipeline (codex implementa → avalia 0–10 → **gate em fan-out**). Um agente
+  de workflow roda o `codex exec` (rede OK, comprovado). Aparece em `/workflows` + paraleliza. Estruture em
+  **fases/agentes separados**: `[agente que roda codex]` → `[agentes do gate]`.
+- **Agent único (subagent)** — disparo avulso de UM codex, sem fan-out de gate (ou gate à parte). Mais leve;
+  background; retorna o relatório. Não aparece em `/workflows`.
+- **Bash em background** — só **fallback** (sem harness de workflow/agent). Precisa de rede → sandbox do Bash
+  desabilitado p/ o codex alcançar a API.
+
+> **Nesting (importante):** o agente que roda o `codex exec` **não deve spawnar outros subagentes** (limite de
+> aninhamento; Workflow aninha só 1 nível). O gate é **outra fase/agente** do workflow — nunca um sub-spawn de
+> dentro do agente-codex.
+
+Em qualquer veículo, valem: **REGRA hard** (worktree dedicada), captura detalhada, **nota 0–10 (aceite ≥9)** e STOP-para-gate.
 
 ## Protocolo
 1. **Resolver alvo.** Worktree + caminho do prompt (do usuário ou inferidos).
