@@ -34,6 +34,13 @@ checkout principal **ABORTE** (`BLOCKED`) e oriente: crie/uso uma worktree prime
 3. Existe um **prompt/spec** (o que o Codex receberá). Convenções comuns: `.dw/spec/<slug>/codex-prompt.md`
    (dev-workflow), `PROMPT.md`, `TASK.md`, ou um caminho que o dono indicar. **Leia-o** — é o escopo/fence/gate.
 
+## Onde rodar — PREFERIR Workflow (visível em /workflows)
+Quando houver harness de **Workflow** (multi-agente), **dispare o `codex exec` DENTRO de um workflow** — um agente
+de workflow consegue rodar o codex (rede OK, comprovado). Vantagens: a execução aparece em `/workflows`, e as
+fases **Implementar → Avaliar (nota 0–10) → Escalar → Gate (fan-out)** orquestram juntas. **Fallback:** se não
+houver harness de workflow, rode via Bash em background (precisa de rede → sandbox do Bash desabilitado p/ o codex
+alcançar a API). Em ambos, vale a REGRA hard (worktree dedicada) + a captura detalhada + STOP-para-gate.
+
 ## Protocolo
 1. **Resolver alvo.** Worktree + caminho do prompt (do usuário ou inferidos).
 2. **Modelo + effort — o parent AVALIA a complexidade e SUGERE/escolhe.** Leia o prompt e dimensione; **proponha**
