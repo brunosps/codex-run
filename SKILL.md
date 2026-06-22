@@ -64,6 +64,11 @@ alcançar a API). Em ambos, vale a REGRA hard (worktree dedicada) + a captura de
    ```
    - `</dev/null` SEMPRE (sem TTY trava). `--json` = eventos parseáveis em streaming; **não** suprima tudo com
      `2>/dev/null` por padrão. `<OUT_DIR>`: dir de spec do projeto (ex.: `.dw/spec/<slug>/QA/`) ou um temp.
+   - **GATE PRECISA DE REDE?** O `--sandbox workspace-write` **bloqueia rede** dos comandos shell do codex — então
+     `pnpm install`/build/test/E2E falham com `EAI_AGAIN`. Se o codex-prompt manda rodar o gate (install/test/etc.),
+     troque por **`--dangerously-bypass-approvals-and-sandbox`** (sem sandbox + sem approvals = full access, com
+     rede) para o codex rodar o gate e **se auto-validar**. Justificável porque a **REGRA hard** garante worktree
+     isolada (off main). Sem rede no gate, o codex só implementa e reporta `blockers` (aí o gate fica com o parent).
    - **Saída DETALHADA por padrão** (para o parent direcionar o follow-up): passe `--output-schema <schema.json>`
      exigindo um relatório rico — não basta "ok". Schema mínimo:
      ```jsonc
@@ -92,8 +97,9 @@ completa). Não pule isto — é o sinal que decide gate × escalonamento. Pontu
 - **Completude** (todas as tasks/itens entregues).
 - **Higiene** (commitado, sem lixo, nada fora do fence, sem deps proibidas).
 - **Qualidade/sem regressão**.
-Faixas: **≥8** = pronto pro gate humano; **5–7** = `FINDINGS` (ajustar ou escalar); **<5** = falha → **escalar**
-(ver abaixo) ou `BLOCKED` se esgotado. Sempre mostre a nota + o racional curto por critério.
+**Bar de aceite: nota ≥9** (decisão do dono). Faixas: **≥9** = aceitável (pronto pro gate humano); **6–8** =
+`FINDINGS` → **escalar** p/ chegar a ≥9; **<6** = falha → **escalar**. `BLOCKED` se a escada esgotar sem atingir 9.
+Sempre mostre a nota + o racional curto por critério.
 
 ## Escalonamento gradual em falha
 Se a nota ficou baixa / o gate falhou / o Codex não concluiu, **re-rode a MESMA tarefa subindo um degrau** —
@@ -103,7 +109,7 @@ gradual, sem desistir no 1º tropeço nem pular pro topo.
 - **Continuar × recomeçar:** edições parciais coerentes → `resume --last` (mantém contexto). Worktree
   quebrada/suja → **resete antes** (`git -C <worktree> reset --hard && git clean -fd`) e rode fresco no degrau
   maior — não empilhe erro sobre erro.
-- **Parada:** pare ao atingir **nota ≥8** (pronto pro gate) OU ao **esgotar** (modelo mais forte + `xhigh` ainda
+- **Parada:** pare ao atingir **nota ≥9** (pronto pro gate) OU ao **esgotar** (modelo mais forte + `xhigh` ainda
   abaixo) → `BLOCKED` com evidência. Anuncie cada degrau; com autonomia, escale sozinho até o teto.
 
 ## Saída detalhada → direcionar o trabalho depois
@@ -132,9 +138,9 @@ A entrega do Codex tem que ser **detalhada o bastante para o parent (Claude) dec
 - `--dangerously-bypass-approvals-and-sandbox` — só com pedido explícito + ambiente já isolado.
 
 ## Structured Return
-- **Status:** `PASS` (rodou, nota ≥8, parou limpo na worktree certa, pronto pro gate) · `FINDINGS` (rodou, nota
-  5–7 ou ressalvas: uncommitted/fora-do-fence/parcial) · `BLOCKED` (faltou CLI/credencial/worktree/prompt, ou
-  escalonamento esgotado <5) · `NOT_APPLICABLE` (sem worktree+prompt → ainda em planejamento).
+- **Status:** `PASS` (rodou, nota ≥9, parou limpo na worktree certa, pronto pro gate) · `FINDINGS` (rodou, nota
+  6–8 ou ressalvas: uncommitted/fora-do-fence/parcial) · `BLOCKED` (faltou CLI/credencial/worktree/prompt, ou
+  escalonamento esgotado sem atingir 9) · `NOT_APPLICABLE` (sem worktree+prompt → ainda em planejamento).
 - **Score:** a nota 0–10 + racional por critério (conformidade/gate/completude/higiene/qualidade).
 - **Scope:** worktree + branch + prompt usado; modelo + effort + sandbox; degraus de escalonamento percorridos.
 - **Evidence:** caminho do `-o`, trecho do stream JSONL, `git status`/diff da worktree pós-run.
