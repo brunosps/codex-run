@@ -110,6 +110,23 @@ completa). Não pule isto — é o sinal que decide gate × escalonamento. Pontu
 `FINDINGS` → **escalar** p/ chegar a ≥9; **<6** = falha → **escalar**. `BLOCKED` se a escada esgotar sem atingir 9.
 Sempre mostre a nota + o racional curto por critério.
 
+## Dupla avaliação: auto-gate do Codex (effort MÁX) → re-gate do Claude (compara notas)
+O codex **não pode corrigir a própria prova sozinho** — daí duas camadas. O codex se auto-gateia barato (perto do
+trabalho) e o **Claude audita independente** e **compara as notas** (pega auto-nota inflada).
+
+1. **Auto-gate do Codex (loop, effort MÁXIMO).** O codex-prompt DEVE instruir: após implementar, **rode o MESMO
+   gate** (lint/test/build/E2E/secure-audit conforme o prompt) e **dê uma auto-nota 0–10** pela mesma rubrica;
+   **corrija e re-rode enquanto a auto-nota <9 ou o gate não estiver verde**, com **effort máximo** (`xhigh`).
+   Pare ao auto-nota ≥9 + gate verde (ou reporte `blockers`). O relatório final traz a **auto-nota + por critério**.
+2. **Re-gate do Claude (independente).** Quando o codex declara aprovado, o parent **re-roda o MESMO gate**
+   (fan-out, preferir Workflow → `/workflows`) e dá a **própria nota 0–10** — sem confiar na auto-nota.
+3. **Comparar + decidir.**
+   - **Claude ≥9 e gap pequeno** vs a auto-nota → **PASS** (pronto p/ decisão de merge do dono).
+   - **Claude <9** OU **gap grande** (codex superestimou) → o re-gate expôs lacunas → **reexecutar**: devolver os
+     gaps ao codex (effort máximo) e repetir 1→2→3 **até convergir** (Claude ≥9 e consistente).
+   - **A nota que vale para o aceite é a do CLAUDE** (auditor independente); a auto-nota do codex é sinal +
+     detector de inflação. Sempre registre **as duas notas + o gap** no Structured Return.
+
 ## Escalonamento gradual em falha
 Se a nota ficou baixa / o gate falhou / o Codex não concluiu, **re-rode a MESMA tarefa subindo um degrau** —
 gradual, sem desistir no 1º tropeço nem pular pro topo.
@@ -150,7 +167,8 @@ A entrega do Codex tem que ser **detalhada o bastante para o parent (Claude) dec
 - **Status:** `PASS` (rodou, nota ≥9, parou limpo na worktree certa, pronto pro gate) · `FINDINGS` (rodou, nota
   6–8 ou ressalvas: uncommitted/fora-do-fence/parcial) · `BLOCKED` (faltou CLI/credencial/worktree/prompt, ou
   escalonamento esgotado sem atingir 9) · `NOT_APPLICABLE` (sem worktree+prompt → ainda em planejamento).
-- **Score:** a nota 0–10 + racional por critério (conformidade/gate/completude/higiene/qualidade).
+- **Score:** a **nota do CLAUDE** (0–10 — vale p/ o aceite, bar ≥9) + a **auto-nota do Codex** + o **gap** entre
+  elas; racional por critério (conformidade/gate/completude/higiene/qualidade). Gap grande = sinal de auto-nota inflada.
 - **Scope:** worktree + branch + prompt usado; modelo + effort + sandbox; degraus de escalonamento percorridos.
 - **Evidence:** caminho do `-o`, trecho do stream JSONL, `git status`/diff da worktree pós-run.
 - **Artifacts:** arquivos criados/alterados (resumo do diff).
