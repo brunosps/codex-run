@@ -69,10 +69,29 @@ Em qualquer veículo, valem: **REGRA hard** (worktree dedicada), captura detalha
      -m <MODEL> --config model_reasoning_effort="<EFFORT>" \
      --sandbox workspace-write --full-auto --json \
      -o <OUT_DIR>/codex-last-message.md \
-     "$(cat <PROMPT_PATH>)" </dev/null
+     "$(cat <PROMPT_PATH>)" </dev/null \
+     > <OUT_DIR>/codex-stream.log 2>&1     # <-- log de streaming durável (trilha de auditoria)
    ```
    - `</dev/null` SEMPRE (sem TTY trava). `--json` = eventos parseáveis em streaming; **não** suprima tudo com
      `2>/dev/null` por padrão. `<OUT_DIR>`: dir de spec do projeto (ex.: `.dw/spec/<slug>/QA/`) ou um temp.
+   - **LOG DE STREAMING = TRILHA DE AUDITORIA (sempre capture):** redirecione o stdout do `--json` p/ um arquivo
+     durável (`> <OUT_DIR>/codex-stream.log 2>&1`). Esse JSONL grava **progressivamente, ao vivo, TUDO** o que o
+     codex faz: cada `command_execution` (comando shell rodado), `item.started/completed`, `agent_message`
+     (raciocínio + respostas do codex), tool-calls, e o `turn.completed` final (com `usage`/tokens). O `-o`
+     captura só a **mensagem final**; o **stream captura o PERCURSO inteiro** — é a auditoria do que o codex
+     realmente fez. **Ler/auditar depois:**
+     - comandos rodados: `grep -oE '"command":"[^"]*"' <stream-log>`
+     - raciocínio/respostas do codex: `grep '"type":"agent_message"' <stream-log>`
+     - tokens: `grep -oE '"usage":\{[^}]*\}' <stream-log> | tail -1`
+     - transcript legível: extraia `agent_message` + `command` na ordem do arquivo.
+   - **Detectar "TERMINOU" (NUNCA por `pgrep` com o caminho da worktree no padrão):** o sinal de pronto é
+     `{"type":"turn.completed"}` no stream-log **+** a worktree com commit/relatório (`git -C <worktree> log`,
+     `-o` preenchido). Um `pgrep -f "<worktree-path>"` (ou `-f "<...>/codex-last-message"`) **AUTO-CASA com o
+     próprio comando que você roda** (o caminho está no argv do grep) → falso "rodando" que pode segurar uma
+     entrega **PRONTA por horas** (e um *waiter* `until ! pgrep ...` com esse padrão **nunca termina**, pois
+     se auto-vê vivo). Em background (`run_in_background`/Workflow), a **notificação de conclusão** é o sinal.
+     Se precisar mesmo de pgrep, restrinja a `pgrep -af "codex exec"` e filtre o `/proc/<pid>/cmdline` — jamais
+     `pgrep` do caminho cru. (Lição: o pattern derruba a sessão se usado p/ *matar* subindo a árvore — ver Disciplina.)
    - **GATE PRECISA DE REDE?** O `--sandbox workspace-write` **bloqueia rede** dos comandos shell do codex — então
      `pnpm install`/build/test/E2E falham com `EAI_AGAIN`. Se o codex-prompt manda rodar o gate (install/test/etc.),
      troque por **`--dangerously-bypass-approvals-and-sandbox`** (sem sandbox + sem approvals = full access, com
@@ -168,12 +187,20 @@ grep -oE '"usage":\{[^}]*\}' <STREAM_LOG> | tail -1
   se o projeto usa dev-workflow: `/dw-review` + `/dw-qa` + `/dw-secure-audit`) **antes** de qualquer merge.
 - **Merge = decisão explícita do dono.** Nunca automático aqui.
 - Sinalize trabalho **uncommitted** ou edição **fora do fence**.
+- **Parar/abortar um codex em andamento:** use **`TaskStop <task_id>`** (se foi `run_in_background`/Workflow) OU
+  **`git worktree remove --force <worktree>`** (puxa o tapete — o codex fica sem onde escrever e morre). Fallback:
+  `kill -9` **só** nos PIDs de `pgrep -af "codex exec"` que casam o tag da worktree no `/proc/<pid>/cmdline`.
+  **NUNCA suba a árvore de processos (ppid → ppid…) p/ matar "o supervisor":** o codex em background é **filho da
+  própria sessão Claude** (`codex ← claude ← bash ← init`) → matar os ancestrais **derruba a sessão**. Os
+  "respawns" aparentes são só os workers node de UM mesmo codex. Ver memória `nunca-tree-walk-kill-codex`.
 
 ## Anti-patterns
 - Rodar no checkout principal / sem confirmar a worktree — corrompe o trabalho ativo. *(pré-flight 2)*
 - Mergear/empurrar dentro da skill — o merge vive fora, após o gate.
 - Pular a nota 0–10 — perde-se o sinal de qualidade/escalonamento.
-- Suprimir todo o output por padrão — perde-se a auditoria do que o Codex fez.
+- Suprimir todo o output por padrão (ou não capturar o stream num log) — perde-se a auditoria do que o Codex fez.
+- **Detectar "terminou" por `pgrep` do caminho da worktree** — auto-casa com o próprio comando → falso "rodando" que segura entregas prontas. Use `turn.completed` + worktree. *(ver §3)*
+- **Matar codex subindo a árvore de PIDs** — derruba a própria sessão Claude. Use `TaskStop`/`worktree remove`. *(ver Disciplina)*
 - `--dangerously-bypass-approvals-and-sandbox` — só com pedido explícito + ambiente já isolado.
 
 ## Structured Return
