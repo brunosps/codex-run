@@ -79,7 +79,13 @@ Em qualquer veículo, valem: **REGRA hard** (worktree dedicada), captura detalha
      codex faz: cada `command_execution` (comando shell rodado), `item.started/completed`, `agent_message`
      (raciocínio + respostas do codex), tool-calls, e o `turn.completed` final (com `usage`/tokens). O `-o`
      captura só a **mensagem final**; o **stream captura o PERCURSO inteiro** — é a auditoria do que o codex
-     realmente fez. **Ler/auditar depois:**
+     realmente fez.
+   - **DURABILIDADE (crítico p/ "auditar depois"):** o stream-log tem que viver num lugar que **sobreviva ao
+     `git worktree remove`**. Se ficar no `QA/` da worktree, o cleanup pós-merge **apaga** e a auditoria some.
+     Escreva num dir **fora da worktree** — ex.: `<REPO_PRINCIPAL>/.dw/codex-audit/<slug>-<run>.log` (gitignore)
+     ou `~/.claude/codex-audit/<slug>-<run>.log` — **OU** `cp` o stream-log + o `-o` p/ fora **antes** de remover
+     a worktree. O relatório `-o` enxuto pode até ser commitado na spec (sobrevive no git); o JSONL bruto é grande,
+     mantenha no dir de auditoria durável (não commitar). **Ler/auditar depois:**
      - comandos rodados: `grep -oE '"command":"[^"]*"' <stream-log>`
      - raciocínio/respostas do codex: `grep '"type":"agent_message"' <stream-log>`
      - tokens: `grep -oE '"usage":\{[^}]*\}' <stream-log> | tail -1`
