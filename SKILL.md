@@ -150,6 +150,19 @@ A entrega do Codex tem que ser **detalhada o bastante para o parent (Claude) dec
 - Se o relatório do Codex vier raso (sem o detalhe do schema), trate como `FINDINGS` e peça o detalhe (resume) ou
   reconstrua o detalhe a partir do diff antes de seguir.
 
+## Telemetria (tokens + tempo) — sempre reportar
+O `codex exec --json` emite, no fim, `{"type":"turn.completed","usage":{...}}` com **tokens**:
+`input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_output_tokens`. Extraia do stream:
+```bash
+grep -oE '"usage":\{[^}]*\}' <STREAM_LOG> | tail -1
+```
+- **Billável efetivo ≈ `(input_tokens − cached_input_tokens) + output_tokens`** — o `input` costuma ser ~95%+
+  **cache**; reportar só o bruto engana. Mostre os dois (bruto + efetivo).
+- **Wall-clock:** o `turn.completed` **não** traz duração → meça você: envolva o `codex exec` com
+  `/usr/bin/time` ou `date +%s` antes/depois (ou aproxime por `stat -c %Y` − `%W/%X` do stream). Reporte em minutos.
+- **Nº de comandos:** `grep -c command_execution <STREAM_LOG>` (proxy de esforço).
+- Registre tudo no **Structured Return → Telemetria**. Útil p/ custo, escalonamento e comparar fases de um fan-out.
+
 ## Disciplina (ao terminar)
 - **STOP — não foi mergeado.** O Codex implementou na worktree; **rode o gate** (testes/lint/build + revisão;
   se o projeto usa dev-workflow: `/dw-review` + `/dw-qa` + `/dw-secure-audit`) **antes** de qualquer merge.
@@ -174,6 +187,7 @@ A entrega do Codex tem que ser **detalhada o bastante para o parent (Claude) dec
 - **Artifacts:** arquivos criados/alterados (resumo do diff).
 - **Decisions:** modelo/effort e por quê; implementação × read-only; continuar × resetar no retry.
 - **Risks:** fora do fence, uncommitted, gate não rodado, dual-use (edição autônoma).
+- **Telemetria:** tokens do `turn.completed` (input/cached/output/reasoning + **billável efetivo**) + **wall-clock** + nº de comandos.
 - **Next Step:** "rodar o gate na worktree; merge é decisão do dono".
 
 ## Notas
